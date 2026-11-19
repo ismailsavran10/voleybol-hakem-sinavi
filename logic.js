@@ -369,8 +369,10 @@
     lines.push('Kesin kurallar:');
     lines.push('- Yalnızca 2025-2028 kurallarına göre kesin doğru bilgiyi kullan. Emin olmadığın sayı, süre veya istisnayı sorma.');
     lines.push('- Türkçe yaz ve resmi kural terimlerini kullan (ihtar, oyundan çıkarma, diskalifiye, geciktirme uyarısı, geçiş boşluğu, oyundaki kaptan vb.).');
-    lines.push('- Her soruda tam olarak bir doğru cevap olsun. "coktan_secmeli" ve "vaka" sorularında 4 kısa, ayırt edici şık olsun; "hepsi" veya "hiçbiri" şıkkı kullanma.');
-    lines.push('- "aciklama" alanında doğru cevabı kural numarasıyla 1-2 cümlede gerekçelendir.');
+    lines.push('- Sorular ulusal hakem klasman düzeyinde olsun: ezber bilgi değil, gerçekçi bir maç vakası (skor, servis atan takım, oyuncu numaraları, önceki yaptırımlar gibi ayrıntılarla) kur ve çözümü yorum gerektirsin. Mümkünse soru en az iki kuralın birlikte uygulanmasını gerektirsin; bu ek kuralları "ilgili" alanında listele.');
+    lines.push('- Her soruda tam olarak bir doğru cevap olsun. "coktan_secmeli" ve "vaka" sorularında 4 ayırt edici şık olsun; şıklar karar ve gerekçe/sonuç içersin, "hepsi" veya "hiçbiri" şıkkı kullanma.');
+    lines.push('- Şık uzunlukları birbirine yakın olsun; doğru şık sistematik olarak en uzun şık OLMASIN (en az bir yanlış şık doğru şıktan uzun olsun).');
+    lines.push('- "aciklama" alanında doğru cevabı ilgili tüm kural numaralarıyla 1-3 cümlede gerekçelendir.');
     lines.push('- 2025-2028 notları: ' + KURAL_NOTLARI.join(' '));
     lines.push('');
     lines.push('Hata yapılan kurallar ve bankadaki ilgili sorular (bağlam):');
@@ -385,7 +387,7 @@
     lines.push('');
     lines.push('Toplam ' + count + ' soru üret ve kurallara dengeli dağıt. "tip" olarak "coktan_secmeli", "vaka" (kısa maç senaryosu) veya "dogru_yanlis" kullan.');
     lines.push('Yalnızca şu biçimde bir JSON dizisi döndür, başka metin yazma:');
-    lines.push('[{"kural":"15.2.3","tip":"coktan_secmeli","soru":"...","secenekler":["...","...","...","..."],"cevap":0,"aciklama":"..."},{"kural":"7.4","tip":"dogru_yanlis","soru":"...","cevap":true,"aciklama":"..."}]');
+    lines.push('[{"kural":"15.2.3","ilgili":["6.1.3"],"tip":"vaka","soru":"...","secenekler":["...","...","...","..."],"cevap":2,"aciklama":"..."},{"kural":"7.4","ilgili":["7.5"],"tip":"dogru_yanlis","soru":"...","cevap":true,"aciklama":"..."}]');
     return lines.join('\n');
   }
 
@@ -408,6 +410,11 @@
         kaynak: 'uretilmis', kural: kural, konu: kuralKonu[kural] || (fallback ? fallback.konu : 1),
         zorluk: 2, tip: tip, soru: soru, aciklama: aciklama, dogrulandi: false, uretilmis: true,
       };
+      if (Array.isArray(it.ilgili)) {
+        var ilg = it.ilgili.filter(function (x) { return typeof x === 'string' && /^[0-9A-Za-z.\-]{1,20}$/.test(x.trim()) && x.trim() !== kural; })
+          .map(function (x) { return x.trim(); }).slice(0, 4);
+        if (ilg.length) q.ilgili = ilg;
+      }
       if (tip === 'dogru_yanlis') {
         if (typeof it.cevap !== 'boolean') return;
         q.cevap = it.cevap;

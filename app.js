@@ -348,6 +348,11 @@
     return t;
   }
   function kuralLabel(k) { return /^[0-9D]/.test(k) ? 'Kural ' + k : k; }
+  // Soruyu çözmek için birlikte uygulanan ek kurallar
+  function ilgiliChips(q) {
+    if (!q.ilgili || !q.ilgili.length) return '';
+    return '<span class="ilgili"><span class="muted small">Birlikte:</span>' + q.ilgili.map(function (k) { return '<span class="chip rule ghost">' + esc(k) + '</span>'; }).join('') + '</span>';
+  }
 
   function renderTopbar() {
     var el = $('#topbar'); if (!el) return;
@@ -566,7 +571,7 @@
     h += '<p class="fb-title">' + (it.correct ? ICON.check + 'Doğru' : ICON.x + 'Yanlış') + '</p>';
     if (!it.correct) h += '<p class="fb-answer">Doğru cevap: <b>' + answerDisplay(q) + '</b></p>';
     h += '<p class="fb-exp">' + esc(q.aciklama) + '</p>';
-    h += '<p class="fb-src"><span class="chip rule">' + esc(kuralLabel(q.kural)) + '</span><span class="muted small">' + esc(kaynakText(q)) + '</span></p>';
+    h += '<p class="fb-src"><span class="chip rule">' + esc(kuralLabel(q.kural)) + '</span>' + ilgiliChips(q) + '<span class="muted small">' + esc(kaynakText(q)) + '</span></p>';
     if (it.gen) {
       h += '<div class="gen-box"><p class="small">' + orb() + 'Bu soru yapay zekâ tarafından üretildi; istatistiklerini etkilemez. Doğruluğunu kontrol ettiysen kalıcı bankaya ekleyebilirsin.</p>' +
         (it.added ? '<span class="chip ok">' + ICON.check + 'Bankaya eklendi</span>' : '<button class="btn soft sm" data-act="add-bank">Bankaya ekle</button>') + '</div>';
@@ -613,7 +618,7 @@
       var q = it.q;
       return '<li class="rv"><p class="rv-q">' + esc(q.soru) + '</p>' + (q.gorsel ? '<img class="rv-img" src="img/' + esc(q.gorsel) + '.webp" alt="Hakem işareti görseli" loading="lazy">' : '') +
         '<p class="rv-a">' + (it.checked ? '<span class="low">Senin cevabın: ' + esc(givenText(it)) + '</span> · ' : '<span class="muted">Boş bırakıldı</span> · ') + '<span class="good">Doğru: ' + answerDisplay(q) + '</span></p>' +
-        '<p class="rv-e">' + esc(q.aciklama) + '</p><p class="fb-src"><span class="chip rule">' + esc(kuralLabel(q.kural)) + '</span><span class="muted small">' + esc(kaynakText(q)) + '</span>' + (it.gen ? '<span class="chip gen">' + orb() + 'Üretilmiş</span>' : '') + '</p>' +
+        '<p class="rv-e">' + esc(q.aciklama) + '</p><p class="fb-src"><span class="chip rule">' + esc(kuralLabel(q.kural)) + '</span>' + ilgiliChips(q) + '<span class="muted small">' + esc(kaynakText(q)) + '</span>' + (it.gen ? '<span class="chip gen">' + orb() + 'Üretilmiş</span>' : '') + '</p>' +
         (it.gen ? '' : reportBlock(q.id)) + '</li>';
     }).join('') + '</ol>';
     h += '</section>';
@@ -732,7 +737,7 @@
       }
       return '<li><details class="pool-q"><summary><span class="qline">' + esc(q.soru) + '</span><span class="pool-meta"><span class="chip rule">' + esc(kuralLabel(q.kural)) + '</span><span class="chip static ghost">' + H.TIP_ADI[q.tip] + '</span><span class="chip static' + (q.zorluk === 3 ? ' strong' : '') + '">' + H.ZORLUK_ADI[q.zorluk] + '</span></span></summary>' +
         (q.gorsel ? '<img class="rv-img" src="img/' + esc(q.gorsel) + '.webp" alt="Hakem işareti görseli" loading="lazy">' : '') +
-        opts + '<p class="small muted">' + esc(q.aciklama) + '</p><p class="fb-src"><span class="muted small">' + esc(kaynakText(q)) + '</span></p></details></li>';
+        opts + '<p class="small muted">' + esc(q.aciklama) + '</p><p class="fb-src">' + ilgiliChips(q) + '<span class="muted small">' + esc(kaynakText(q)) + '</span></p></details></li>';
     }).join('') + '</ol>';
     return h;
   }
