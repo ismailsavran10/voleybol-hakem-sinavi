@@ -18,7 +18,7 @@
     store: null, storeKind: 'yukleniyor', loaded: false,
     ai: null, aiState: 'bekleniyor',
     view: 'home', session: null, sheet: null, result: null,
-    ui: { studyTab: 'ozet', reportOpen: null, confirmExit: false, confirmReset: false, examCount: 25, examTypes: H.VARSAYILAN_TIPLER.slice(), topicSel: 1, topicCount: 20, weakCount: 15, weakAI: true, reviewAI: true },
+    ui: { studyTab: 'ozet', reportOpen: null, confirmExit: false, confirmReset: false, examCount: 25, examTypes: H.VARSAYILAN_TIPLER.slice(), examZorluk: 'hepsi', topicSel: 1, topicCount: 20, topicZorluk: 'hepsi', havuzKonu: 1, havuzZorluk: 'hepsi', weakCount: 15, weakAI: true, reviewAI: true },
   };
 
   function rebuildBank() {
@@ -293,12 +293,25 @@
   function startExam() {
     var n = Math.max(1, Math.min(200, parseInt(S.ui.examCount, 10) || 25));
     var types = S.ui.examTypes.length ? S.ui.examTypes : H.VARSAYILAN_TIPLER;
-    var qs = H.selectExam(S.bank, { count: n, types: types, reported: S.reports, rnd: rnd });
-    startSession('exam', qs, { title: 'Deneme Sınavı', duration: H.examDurationSec(qs.length) });
+    var qs = H.selectExam(S.bank, { count: n, types: types, zorluk: H.zorlukSecimi(S.ui.examZorluk), reported: S.reports, rnd: rnd });
+    startSession('exam', qs, { title: 'Deneme Sınavı', duration: H.examDurationSec(qs.length), info: zorlukBilgi(S.ui.examZorluk) });
   }
-  function startTopic(konu, count) {
-    var qs = H.selectTopic(S.bank, S.stats, konu, count === 'all' ? 0 : count, rnd);
-    startSession('topic', qs, { title: 'Konu Çalışması · ' + H.konuAdi(konu) });
+  function startTopic(konu, count, zorlukId) {
+    var qs = H.selectTopic(S.bank, S.stats, konu, count === 'all' ? 0 : count, rnd, { zorluk: H.zorlukSecimi(zorlukId) });
+    if (!qs.length) { toast('Bu seçime uyan soru yok.'); return; }
+    startSession('topic', qs, { title: 'Konu Çalışması · ' + H.konuAdi(konu), info: zorlukBilgi(zorlukId) });
+  }
+  function zorlukBilgi(id) {
+    var o = H.ZORLUK_SECENEK.filter(function (x) { return x.id === id; })[0];
+    return o && o.z ? 'Zorluk: ' + o.ad : '';
+  }
+  function zorlukChips(act, cur) {
+    return '<fieldset class="field"><legend>Zorluk</legend><div class="chips">' + H.ZORLUK_SECENEK.map(function (o) {
+      return '<button class="chip' + (cur === o.id ? ' on' : '') + '" data-act="' + act + '" data-z="' + o.id + '" aria-pressed="' + (cur === o.id) + '">' + o.ad + '</button>';
+    }).join('') + '</div></fieldset>';
+  }
+  function examAvail() {
+    return H.filterBank(S.bank, { types: S.ui.examTypes, zorluk: H.zorlukSecimi(S.ui.examZorluk), reported: S.reports, excludeReported: true }).length;
   }
   function startWeak() {
     var sel = H.selectWeak(S.bank, S.stats, S.ui.weakCount, rnd);
@@ -403,7 +416,7 @@
     if (!S.sheet) { el.hidden = true; el.innerHTML = ''; return; }
     var h = '';
     if (S.sheet === 'exam') {
-      var avail = H.filterBank(S.bank, { types: S.ui.examTypes, reported: S.reports, excludeReported: true }).length;
+      var avail = examAvail();
       var n = Math.min(parseInt(S.ui.examCount, 10) || 0, avail);
       h += '<h2 id="sheet-title">Deneme Sınavı</h2><p class="muted">Tüm konulardan karışık sorular. Soru başına 72 saniye; sonuçlar sınav bitince gösterilir.</p>' +
         '<label class="field"><span>Soru sayısı</span><span class="stepper"><button class="btn ghost sm" data-act="exam-step" data-d="-5" aria-label="5 azalt">−</button>' +
@@ -416,6 +429,7 @@
           var on = S.ui.examTypes.indexOf(t) >= 0;
           return '<label class="check"><input type="checkbox" id="type-' + t + '" data-act="exam-type" value="' + t + '"' + (on ? ' checked' : '') + '><span>' + H.TIP_ADI[t] + (t === 'bosluk' ? ' <em>(isteğe bağlı)</em>' : '') + '</span></label>';
         }).join('') + '</div></fieldset>' +
+        zorlukChips('exam-z', S.ui.examZorluk) +
         '<p class="muted small">Seçime uyan doğrulanmış soru: <b class="num">' + avail + '</b>. Bildirilen sorular sınava alınmaz.</p>' +
         '<div class="sheet-actions"><button class="btn ghost" data-act="close">Vazgeç</button><button class="btn primary" data-act="start-exam"' + (avail ? '' : ' disabled') + '>Sınavı başlat</button></div>';
     } else if (S.sheet === 'topic') {
@@ -430,6 +444,7 @@
         '<fieldset class="field"><legend>Soru sayısı</legend><div class="chips">' + [10, 20, 'all'].map(function (c) {
           return '<button class="chip' + (S.ui.topicCount === c ? ' on' : '') + '" data-act="topic-count" data-c="' + c + '">' + (c === 'all' ? 'Tümü' : c) + '</button>';
         }).join('') + '</div></fieldset>' +
+        zorlukChips('topic-z', S.ui.topicZorluk) +
         '<div class="sheet-actions"><button class="btn ghost" data-act="close">Vazgeç</button><button class="btn primary" data-act="start-topic-sheet">Başlat</button></div>';
     } else if (S.sheet === 'weak') {
       var sel = H.selectWeak(S.bank, S.stats, S.ui.weakCount, H.rng(7));
@@ -636,13 +651,16 @@
     }).join('') + '</div>';
     h += '</section>';
 
-    var rep = Object.keys(S.reports);
+    var allRep = Object.keys(S.reports);
+    var rep = allRep.filter(function (id) { return S.byId[id]; });
+    var eski = allRep.length - rep.length; // soru bankası yenilendiğinde artık var olmayan sorulara ait bildirimler
     h += '<section class="card"><div class="card-head"><h2>Bildirilen sorular</h2><span class="muted">' + rep.length + '</span></div>';
     if (!rep.length) h += '<p class="empty">Hatalı bulduğun soruları "Bu soru hatalı" ile bildirebilirsin; düzeltilene kadar burada işaretli kalır ve deneme sınavına alınmaz.</p>';
     else h += '<ul class="rows">' + rep.map(function (id) {
       var q = S.byId[id]; var r = S.reports[id];
-      return '<li class="row rep"><div class="row-main"><span class="row-title">' + esc(q ? q.soru : id) + '</span><span class="row-sub">' + esc(q ? kuralLabel(q.kural) + ' · ' + id : id) + (r.note ? ' · Not: ' + esc(r.note) : '') + '</span></div><button class="btn ghost sm" data-act="unreport" data-q="' + esc(id) + '">Düzeltildi</button></li>';
+      return '<li class="row rep"><div class="row-main"><span class="row-title qline">' + esc(q.soru) + '</span><span class="row-sub">' + esc(kuralLabel(q.kural) + ' · ' + id) + (r.note ? ' · Not: ' + esc(r.note) : '') + '</span></div><button class="btn ghost sm" data-act="unreport" data-q="' + esc(id) + '">Düzeltildi</button></li>';
     }).join('') + '</ul>';
+    if (eski) h += '<p class="muted small old-reps">Önceki soru bankasından kalan ' + eski + ' bildirim var; bu sorular yeni havuzda yok. <button class="link" data-act="clear-old-reports">Temizle</button></p>';
     h += '</section>';
 
     h += '<section class="card quiet"><div class="card-head"><h2>İlerlemeyi sıfırla</h2></div><p class="muted small">Tüm cevap istatistikleri ve tekrar listesi silinir. Bankaya eklediğin sorular ve bildirimler kalır.</p>' +
@@ -652,8 +670,8 @@
 
   // ---------- Çalışma ----------
   function viewCalisma() {
-    var tabs = [['ozet', 'Konu özetleri'], ['sayi', 'Sayısal değerler'], ['degisen', 'Değişen kurallar'], ['isaret', 'İşaretler']];
-    var h = '<div class="page-head"><h1>Çalışma</h1><p class="lede">Kural numaralarıyla kısa özetler, tüm sayılar tek tabloda ve 2025-2028 değişiklikleri.</p></div>';
+    var tabs = [['ozet', 'Konu özetleri'], ['havuz', 'Soru havuzu'], ['sayi', 'Sayısal değerler'], ['degisen', 'Değişen kurallar'], ['isaret', 'İşaretler']];
+    var h = '<div class="page-head"><h1>Çalışma</h1><p class="lede">Kural numaralarıyla kısa özetler, her konunun soru havuzu, tüm sayılar tek tabloda ve 2025-2028 değişiklikleri.</p></div>';
     h += '<div class="seg" role="tablist">' + tabs.map(function (t) { return '<button role="tab" aria-selected="' + (S.ui.studyTab === t[0]) + '" class="seg-btn' + (S.ui.studyTab === t[0] ? ' on' : '') + '" data-act="study-tab" data-t="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
     if (S.ui.studyTab === 'ozet') {
       h += '<div class="sum-list">' + H.KONULAR.map(function (k) {
@@ -662,6 +680,8 @@
           items.map(function (p) { return '<li><span class="chip rule">' + esc(p[0]) + '</span><span>' + esc(p[1]) + '</span></li>'; }).join('') +
           '</ul><button class="btn soft sm" data-act="start-topic" data-konu="' + k.id + '">Bu konuyu çalış</button></details>';
       }).join('') + '</div>';
+    } else if (S.ui.studyTab === 'havuz') {
+      h += viewHavuz();
     } else if (S.ui.studyTab === 'sayi') {
       h += STUDY.sayisal.map(function (g) {
         return '<section class="card"><div class="card-head"><h2>' + esc(g.grup) + '</h2></div><div class="table-wrap"><table class="tbl nums"><thead><tr><th>Konu</th><th>Değer</th><th class="r">Kaynak</th></tr></thead><tbody>' +
@@ -679,6 +699,41 @@
         }).join('') + '</div>';
       }).join('');
     }
+    return h;
+  }
+
+  // Konu soru havuzu: her konunun kendi havuzu, zorluk/tip dağılımı ve cevaplı liste
+  function viewHavuz() {
+    var k = S.ui.havuzKonu, ko = H.KONULAR[k - 1], oz = H.havuzOzet(S.bank, k);
+    var zSec = H.zorlukSecimi(S.ui.havuzZorluk);
+    var list = S.bank.filter(function (q) { return q.dogrulandi && q.konu === k && (!zSec || zSec.indexOf(q.zorluk) >= 0); })
+      .sort(function (a, b) { return H.compareRule(a.kural, b.kural) || b.zorluk - a.zorluk; });
+    var h = '<section class="card pool-head">' +
+      '<label class="field"><span>Konu</span><select id="havuz-konu" data-act="havuz-konu">' + H.KONULAR.map(function (x) {
+        return '<option value="' + x.id + '"' + (x.id === k ? ' selected' : '') + '>' + x.id + '. ' + esc(x.ad) + ' (' + H.havuzOzet(S.bank, x.id).toplam + ')</option>';
+      }).join('') + '</select></label>' +
+      '<p class="muted small">' + esc(/^\d/.test(ko.kural) ? 'Kural ' + ko.kural : ko.kural) + ' · <b class="num">' + oz.toplam + '</b> soru</p>' +
+      '<div class="pool-dist">' +
+        [3, 2, 1].map(function (z) { return '<span class="chip static' + (z === 3 ? ' strong' : '') + '">' + H.ZORLUK_ADI[z] + ' <b class="num">' + (oz.zorluk[z] || 0) + '</b></span>'; }).join('') +
+        Object.keys(oz.tip).map(function (t) { return '<span class="chip static ghost">' + H.TIP_ADI[t] + ' <b class="num">' + oz.tip[t] + '</b></span>'; }).join('') +
+      '</div>' +
+      zorlukChips('havuz-z', S.ui.havuzZorluk) +
+      '<div class="row-actions"><button class="btn primary" data-act="start-havuz"' + (list.length ? '' : ' disabled') + '>Bu havuzdan çalış (' + list.length + ' soru)</button></div>' +
+      '</section>';
+    if (!list.length) return h + '<p class="empty">Bu zorlukta soru yok.</p>';
+    h += '<ol class="pool-list">' + list.map(function (q) {
+      var opts = '';
+      if (q.secenekler && !q.ters) {
+        opts = '<ul class="pool-opts">' + q.secenekler.map(function (s, i) {
+          return '<li class="' + (i === q.cevap ? 'right' : '') + '">' + (i === q.cevap ? ICON.check : '') + '<span>' + esc(s) + '</span></li>';
+        }).join('') + '</ul>';
+      } else {
+        opts = '<p class="small"><span class="good">Doğru: ' + answerDisplay(q) + '</span></p>';
+      }
+      return '<li><details class="pool-q"><summary><span class="qline">' + esc(q.soru) + '</span><span class="pool-meta"><span class="chip rule">' + esc(kuralLabel(q.kural)) + '</span><span class="chip static ghost">' + H.TIP_ADI[q.tip] + '</span><span class="chip static' + (q.zorluk === 3 ? ' strong' : '') + '">' + H.ZORLUK_ADI[q.zorluk] + '</span></span></summary>' +
+        (q.gorsel ? '<img class="rv-img" src="img/' + esc(q.gorsel) + '.webp" alt="Hakem işareti görseli" loading="lazy">' : '') +
+        opts + '<p class="small muted">' + esc(q.aciklama) + '</p><p class="fb-src"><span class="muted small">' + esc(kaynakText(q)) + '</span></p></details></li>';
+    }).join('') + '</ol>';
     return h;
   }
 
@@ -709,7 +764,14 @@
       case 'exam-preset': S.ui.examCount = parseInt(t.getAttribute('data-n'), 10); renderSheet(); break;
       case 'start-exam': startExam(); break;
       case 'topic-count': var c = t.getAttribute('data-c'); S.ui.topicCount = c === 'all' ? 'all' : parseInt(c, 10); renderSheet(); break;
-      case 'start-topic-sheet': startTopic(S.ui.topicSel, S.ui.topicCount); break;
+      case 'start-topic-sheet': startTopic(S.ui.topicSel, S.ui.topicCount, S.ui.topicZorluk); break;
+      case 'exam-z': S.ui.examZorluk = t.getAttribute('data-z'); renderSheet(); break;
+      case 'topic-z': S.ui.topicZorluk = t.getAttribute('data-z'); renderSheet(); break;
+      case 'havuz-z': S.ui.havuzZorluk = t.getAttribute('data-z'); renderMain(); break;
+      case 'start-havuz': startTopic(S.ui.havuzKonu, 'all', S.ui.havuzZorluk); break;
+      case 'clear-old-reports':
+        Object.keys(S.reports).forEach(function (id) { if (!S.byId[id]) removeReport(id); });
+        toast('Eski bildirimler temizlendi.'); renderMain(); break;
       case 'start-topic': startTopic(parseInt(t.getAttribute('data-konu'), 10), 20); break;
       case 'weak-count': S.ui.weakCount = parseInt(t.getAttribute('data-c'), 10); renderSheet(); break;
       case 'start-weak': startWeak(); break;
@@ -753,6 +815,8 @@
       renderSheet();
     } else if (act === 'topic-sel') {
       S.ui.topicSel = parseInt(t.value, 10); renderSheet();
+    } else if (act === 'havuz-konu') {
+      S.ui.havuzKonu = parseInt(t.value, 10); renderMain();
     } else if (act === 'ai-toggle') {
       S.ui[t.getAttribute('data-key')] = t.checked;
     }
@@ -761,7 +825,7 @@
     var t = e.target;
     if (t.id === 'exam-count') {
       S.ui.examCount = t.value;
-      var avail = H.filterBank(S.bank, { types: S.ui.examTypes, reported: S.reports, excludeReported: true }).length;
+      var avail = examAvail();
       var d = $('#exam-dur'); if (d) d.textContent = H.formatDuration(H.examDurationSec(Math.min(parseInt(t.value, 10) || 0, avail)));
     } else if (t.id === 'blank-in') {
       var it = currentItem(); if (it && S.session && S.session.mode === 'exam') it.answer = t.value;

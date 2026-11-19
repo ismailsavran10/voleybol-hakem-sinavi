@@ -53,6 +53,31 @@
   var TUM_TIPLER = ['coktan_secmeli', 'dogru_yanlis', 'vaka', 'isaret', 'bosluk'];
   var VARSAYILAN_TIPLER = ['coktan_secmeli', 'dogru_yanlis', 'vaka', 'isaret'];
 
+  // Zorluk: 1 temel, 2 orta, 3 klasman (detaylı kural bilgisi)
+  var ZORLUK_ADI = { 1: 'Temel', 2: 'Orta', 3: 'Klasman' };
+  var ZORLUK_SECENEK = [
+    { id: 'hepsi', ad: 'Tümü', z: null },
+    { id: 'orta', ad: 'Orta + klasman', z: [2, 3] },
+    { id: 'klasman', ad: 'Yalnız klasman', z: [3] },
+  ];
+  function zorlukSecimi(id) {
+    for (var i = 0; i < ZORLUK_SECENEK.length; i++) if (ZORLUK_SECENEK[i].id === id) return ZORLUK_SECENEK[i].z;
+    return null;
+  }
+
+  // Konu havuzu özeti: zorluk, tip ve kaynak dağılımı
+  function havuzOzet(bank, konu) {
+    var o = { toplam: 0, zorluk: { 1: 0, 2: 0, 3: 0 }, tip: {}, kaynak: {} };
+    bank.forEach(function (q) {
+      if (!q.dogrulandi || q.konu !== konu) return;
+      o.toplam++;
+      o.zorluk[q.zorluk] = (o.zorluk[q.zorluk] || 0) + 1;
+      o.tip[q.tip] = (o.tip[q.tip] || 0) + 1;
+      o.kaynak[q.kaynak] = (o.kaynak[q.kaynak] || 0) + 1;
+    });
+    return o;
+  }
+
   function konuAdi(id) {
     for (var i = 0; i < KONULAR.length; i++) if (KONULAR[i].id === id) return KONULAR[i].ad;
     return 'Konu ' + id;
@@ -239,6 +264,7 @@
     return bank.filter(function (q) {
       if (!q.dogrulandi) return false;
       if (types && types.indexOf(q.tip) < 0) return false;
+      if (opts.zorluk && opts.zorluk.indexOf(q.zorluk) < 0) return false;
       if (opts.excludeReported && reported[q.id]) return false;
       return true;
     });
@@ -247,7 +273,7 @@
   // Deneme sınavı: konular arasında dönüşümlü seçim (tüm konular karışık)
   function selectExam(bank, opts) {
     var rnd = opts.rnd || Math.random;
-    var pool = filterBank(bank, { types: opts.types, reported: opts.reported, excludeReported: true });
+    var pool = filterBank(bank, { types: opts.types, zorluk: opts.zorluk, reported: opts.reported, excludeReported: true });
     var byTopic = {};
     shuffle(pool, rnd).forEach(function (q) { (byTopic[q.konu] = byTopic[q.konu] || []).push(q); });
     var topics = shuffle(Object.keys(byTopic), rnd);
@@ -264,9 +290,9 @@
   }
 
   // Konu çalışması: önce görülmemiş, sonra tekrar listesindekiler, sonra diğerleri
-  function selectTopic(bank, stats, konu, count, rnd) {
+  function selectTopic(bank, stats, konu, count, rnd, opts) {
     rnd = rnd || Math.random;
-    var pool = filterBank(bank).filter(function (q) { return q.konu === konu; });
+    var pool = filterBank(bank, { zorluk: opts && opts.zorluk }).filter(function (q) { return q.konu === konu; });
     var unseen = [], review = [], rest = [];
     pool.forEach(function (q) {
       var st = stats[q.id];
@@ -429,6 +455,7 @@
   var API = {
     DAY: DAY, SN_PER_SORU: SN_PER_SORU, TEKRAR_GUN: TEKRAR_GUN, OGRENILDI_SERI: OGRENILDI_SERI,
     KONULAR: KONULAR, KAYNAK_ADI: KAYNAK_ADI, TIP_ADI: TIP_ADI, TUM_TIPLER: TUM_TIPLER, VARSAYILAN_TIPLER: VARSAYILAN_TIPLER,
+    ZORLUK_ADI: ZORLUK_ADI, ZORLUK_SECENEK: ZORLUK_SECENEK, zorlukSecimi: zorlukSecimi, havuzOzet: havuzOzet,
     konuAdi: konuAdi, rng: rng, shuffle: shuffle,
     examDurationSec: examDurationSec, formatDuration: formatDuration,
     emptyStat: emptyStat, applyAnswer: applyAnswer, inReview: inReview, isDue: isDue, isDueToday: isDueToday,
