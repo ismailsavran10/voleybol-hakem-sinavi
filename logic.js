@@ -299,7 +299,10 @@
     }
     var out;
     if (opts.zincirPay > 0 && !opts.zincir) {
-      var zin = pool.filter(function (q) { return q.zincir; });
+      // Aynı senaryodan en fazla bir soru: sonraki sorular önceki sorunun sonucunu anlattığı için cevabı ele verir
+      var bySen = {};
+      shuffle(pool.filter(function (q) { return q.zincir; }), rnd).forEach(function (q) { var k = q.senaryo || q.id; if (!bySen[k]) bySen[k] = q; });
+      var zin = Object.keys(bySen).map(function (k) { return bySen[k]; });
       var diger = pool.filter(function (q) { return !q.zincir; });
       var nz = Math.min(zin.length, Math.round(count * opts.zincirPay));
       out = dagit(zin, nz);
@@ -310,6 +313,12 @@
       }
     } else {
       out = dagit(pool, count);
+    }
+    if (opts.zincir) {
+      // Yalnız senaryo soruları: senaryolar karışık sırada, her senaryonun soruları maç sırasıyla
+      var sira = {};
+      shuffle(out.map(function (q) { return q.senaryo || q.id; }), rnd).forEach(function (k, i) { if (!(k in sira)) sira[k] = i; });
+      return out.slice().sort(function (a, b) { return (sira[a.senaryo || a.id] - sira[b.senaryo || b.id]) || ((a.adim || 0) - (b.adim || 0)); });
     }
     return shuffle(out, rnd);
   }
