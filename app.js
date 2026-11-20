@@ -18,7 +18,7 @@
     store: null, storeKind: 'yukleniyor', loaded: false,
     ai: null, aiState: 'bekleniyor',
     view: 'home', session: null, sheet: null, result: null,
-    ui: { studyTab: 'ozet', reportOpen: null, confirmExit: false, confirmReset: false, examCount: 25, examTypes: H.VARSAYILAN_TIPLER.slice(), examZorluk: 'hepsi', topicSel: 1, topicCount: 20, topicZorluk: 'hepsi', havuzKonu: 1, havuzZorluk: 'hepsi', weakCount: 15, weakAI: true, reviewAI: true },
+    ui: { studyTab: 'ozet', reportOpen: null, confirmExit: false, confirmReset: false, examCount: 25, examTypes: H.VARSAYILAN_TIPLER.slice(), examZorluk: 'karma', topicSel: 1, topicCount: 20, topicZorluk: 'hepsi', havuzKonu: 1, havuzZorluk: 'hepsi', weakCount: 15, weakAI: true, reviewAI: true },
   };
 
   function rebuildBank() {
@@ -293,25 +293,28 @@
   function startExam() {
     var n = Math.max(1, Math.min(200, parseInt(S.ui.examCount, 10) || 25));
     var types = S.ui.examTypes.length ? S.ui.examTypes : H.VARSAYILAN_TIPLER;
-    var qs = H.selectExam(S.bank, { count: n, types: types, zorluk: H.zorlukSecimi(S.ui.examZorluk), reported: S.reports, rnd: rnd });
+    var f = H.zorlukFiltre(S.ui.examZorluk);
+    var qs = H.selectExam(S.bank, { count: n, types: types, zorluk: f.zorluk, zincir: f.zincir, zincirPay: f.zincirPay, reported: S.reports, rnd: rnd });
     startSession('exam', qs, { title: 'Deneme Sınavı', duration: H.examDurationSec(qs.length), info: zorlukBilgi(S.ui.examZorluk) });
   }
   function startTopic(konu, count, zorlukId) {
-    var qs = H.selectTopic(S.bank, S.stats, konu, count === 'all' ? 0 : count, rnd, { zorluk: H.zorlukSecimi(zorlukId) });
+    var f = H.zorlukFiltre(zorlukId);
+    var qs = H.selectTopic(S.bank, S.stats, konu, count === 'all' ? 0 : count, rnd, { zorluk: f.zorluk, zincir: f.zincir });
     if (!qs.length) { toast('Bu seçime uyan soru yok.'); return; }
     startSession('topic', qs, { title: 'Konu Çalışması · ' + H.konuAdi(konu), info: zorlukBilgi(zorlukId) });
   }
   function zorlukBilgi(id) {
     var o = H.ZORLUK_SECENEK.filter(function (x) { return x.id === id; })[0];
-    return o && o.z ? 'Zorluk: ' + o.ad : '';
+    return o && (o.z || o.zincir || o.zincirPay) ? 'Zorluk: ' + o.ad : '';
   }
-  function zorlukChips(act, cur) {
-    return '<fieldset class="field"><legend>Zorluk</legend><div class="chips">' + H.ZORLUK_SECENEK.map(function (o) {
+  function zorlukChips(act, cur, sinav) {
+    return '<fieldset class="field"><legend>Zorluk</legend><div class="chips">' + H.ZORLUK_SECENEK.filter(function (o) { return sinav || !o.sinav; }).map(function (o) {
       return '<button class="chip' + (cur === o.id ? ' on' : '') + '" data-act="' + act + '" data-z="' + o.id + '" aria-pressed="' + (cur === o.id) + '">' + o.ad + '</button>';
     }).join('') + '</div></fieldset>';
   }
   function examAvail() {
-    return H.filterBank(S.bank, { types: S.ui.examTypes, zorluk: H.zorlukSecimi(S.ui.examZorluk), reported: S.reports, excludeReported: true }).length;
+    var f = H.zorlukFiltre(S.ui.examZorluk);
+    return H.filterBank(S.bank, { types: S.ui.examTypes, zorluk: f.zorluk, zincir: f.zincir, reported: S.reports, excludeReported: true }).length;
   }
   function startWeak() {
     var sel = H.selectWeak(S.bank, S.stats, S.ui.weakCount, rnd);
@@ -434,7 +437,7 @@
           var on = S.ui.examTypes.indexOf(t) >= 0;
           return '<label class="check"><input type="checkbox" id="type-' + t + '" data-act="exam-type" value="' + t + '"' + (on ? ' checked' : '') + '><span>' + H.TIP_ADI[t] + (t === 'bosluk' ? ' <em>(isteğe bağlı)</em>' : '') + '</span></label>';
         }).join('') + '</div></fieldset>' +
-        zorlukChips('exam-z', S.ui.examZorluk) +
+        zorlukChips('exam-z', S.ui.examZorluk, true) +
         '<p class="muted small">Seçime uyan doğrulanmış soru: <b class="num">' + avail + '</b>. Bildirilen sorular sınava alınmaz.</p>' +
         '<div class="sheet-actions"><button class="btn ghost" data-act="close">Vazgeç</button><button class="btn primary" data-act="start-exam"' + (avail ? '' : ' disabled') + '>Sınavı başlat</button></div>';
     } else if (S.sheet === 'topic') {
@@ -501,7 +504,7 @@
     h += '<div class="test-meta"><span class="num">Soru ' + (s.idx + 1) + ' / ' + s.items.length + '</span>' + aiStatus(s) + '</div>';
 
     h += '<article class="qcard" aria-live="polite">';
-    h += '<div class="qchips"><span class="chip static">' + esc(H.konuAdi(q.konu)) + '</span><span class="chip static ghost">' + H.TIP_ADI[q.tip] + '</span>' +
+    h += '<div class="qchips"><span class="chip static">' + esc(H.konuAdi(q.konu)) + '</span><span class="chip static ghost">' + H.TIP_ADI[q.tip] + '</span>' + (q.zincir ? '<span class="chip static strong">Zincir vaka</span>' : '') +
       (it.gen ? '<span class="chip gen">' + orb() + 'Üretilmiş</span>' : '') +
       (S.reports[q.id] ? '<span class="chip warn">' + ICON.flag + 'Bildirildi</span>' : '') + '</div>';
     h += '<p class="qtext">' + esc(q.soru) + '</p>';
@@ -710,8 +713,8 @@
   // Konu soru havuzu: her konunun kendi havuzu, zorluk/tip dağılımı ve cevaplı liste
   function viewHavuz() {
     var k = S.ui.havuzKonu, ko = H.KONULAR[k - 1], oz = H.havuzOzet(S.bank, k);
-    var zSec = H.zorlukSecimi(S.ui.havuzZorluk);
-    var list = S.bank.filter(function (q) { return q.dogrulandi && q.konu === k && (!zSec || zSec.indexOf(q.zorluk) >= 0); })
+    var hf = H.zorlukFiltre(S.ui.havuzZorluk);
+    var list = H.filterBank(S.bank, { zorluk: hf.zorluk, zincir: hf.zincir }).filter(function (q) { return q.konu === k; })
       .sort(function (a, b) { return H.compareRule(a.kural, b.kural) || b.zorluk - a.zorluk; });
     var h = '<section class="card pool-head">' +
       '<label class="field"><span>Konu</span><select id="havuz-konu" data-act="havuz-konu">' + H.KONULAR.map(function (x) {
@@ -735,7 +738,7 @@
       } else {
         opts = '<p class="small"><span class="good">Doğru: ' + answerDisplay(q) + '</span></p>';
       }
-      return '<li><details class="pool-q"><summary><span class="qline">' + esc(q.soru) + '</span><span class="pool-meta"><span class="chip rule">' + esc(kuralLabel(q.kural)) + '</span><span class="chip static ghost">' + H.TIP_ADI[q.tip] + '</span><span class="chip static' + (q.zorluk === 3 ? ' strong' : '') + '">' + H.ZORLUK_ADI[q.zorluk] + '</span></span></summary>' +
+      return '<li><details class="pool-q"><summary><span class="qline">' + esc(q.soru) + '</span><span class="pool-meta"><span class="chip rule">' + esc(kuralLabel(q.kural)) + '</span><span class="chip static ghost">' + H.TIP_ADI[q.tip] + '</span>' + (q.zincir ? '<span class="chip static strong">Zincir</span>' : '') + '<span class="chip static' + (q.zorluk === 3 ? ' strong' : '') + '">' + H.ZORLUK_ADI[q.zorluk] + '</span></span></summary>' +
         (q.gorsel ? '<img class="rv-img" src="img/' + esc(q.gorsel) + '.webp" alt="Hakem işareti görseli" loading="lazy">' : '') +
         opts + '<p class="small muted">' + esc(q.aciklama) + '</p><p class="fb-src">' + ilgiliChips(q) + '<span class="muted small">' + esc(kaynakText(q)) + '</span></p></details></li>';
     }).join('') + '</ol>';

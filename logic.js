@@ -55,15 +55,21 @@
 
   // Zorluk: 1 temel, 2 orta, 3 klasman (detaylı kural bilgisi)
   var ZORLUK_ADI = { 1: 'Temel', 2: 'Orta', 3: 'Klasman' };
+  // karma: soruların bir kısmı (zincirPay) uzun, çok olaylı "zincir vakalar"dan seçilir
   var ZORLUK_SECENEK = [
+    { id: 'karma', ad: 'Karma (%40 zincir vaka)', z: null, zincirPay: 0.4, sinav: true },
     { id: 'hepsi', ad: 'Tümü', z: null },
-    { id: 'orta', ad: 'Orta + klasman', z: [2, 3] },
     { id: 'klasman', ad: 'Yalnız klasman', z: [3] },
+    { id: 'zincir', ad: 'Yalnız zincir vakalar', z: null, zincir: true },
   ];
-  function zorlukSecimi(id) {
-    for (var i = 0; i < ZORLUK_SECENEK.length; i++) if (ZORLUK_SECENEK[i].id === id) return ZORLUK_SECENEK[i].z;
-    return null;
+  function zorlukFiltre(id) {
+    for (var i = 0; i < ZORLUK_SECENEK.length; i++) {
+      var o = ZORLUK_SECENEK[i];
+      if (o.id === id) return { zorluk: o.z, zincir: !!o.zincir, zincirPay: o.zincirPay || 0 };
+    }
+    return { zorluk: null, zincir: false, zincirPay: 0 };
   }
+  function zorlukSecimi(id) { return zorlukFiltre(id).zorluk; }
 
   // Konu havuzu özeti: zorluk, tip ve kaynak dağılımı
   function havuzOzet(bank, konu) {
@@ -265,6 +271,7 @@
       if (!q.dogrulandi) return false;
       if (types && types.indexOf(q.tip) < 0) return false;
       if (opts.zorluk && opts.zorluk.indexOf(q.zorluk) < 0) return false;
+      if (opts.zincir && !q.zincir) return false;
       if (opts.excludeReported && reported[q.id]) return false;
       return true;
     });
@@ -273,18 +280,36 @@
   // Deneme sınavı: konular arasında dönüşümlü seçim (tüm konular karışık)
   function selectExam(bank, opts) {
     var rnd = opts.rnd || Math.random;
-    var pool = filterBank(bank, { types: opts.types, zorluk: opts.zorluk, reported: opts.reported, excludeReported: true });
-    var byTopic = {};
-    shuffle(pool, rnd).forEach(function (q) { (byTopic[q.konu] = byTopic[q.konu] || []).push(q); });
-    var topics = shuffle(Object.keys(byTopic), rnd);
-    var out = [], count = Math.min(opts.count, pool.length);
-    while (out.length < count) {
-      var progressed = false;
-      for (var i = 0; i < topics.length && out.length < count; i++) {
-        var list = byTopic[topics[i]];
-        if (list.length) { out.push(list.shift()); progressed = true; }
+    var pool = filterBank(bank, { types: opts.types, zorluk: opts.zorluk, zincir: opts.zincir, reported: opts.reported, excludeReported: true });
+    var count = Math.min(opts.count, pool.length);
+    // Konular arasında dönüşümlü seçim
+    function dagit(list, n) {
+      var byTopic = {}, out = [];
+      shuffle(list, rnd).forEach(function (q) { (byTopic[q.konu] = byTopic[q.konu] || []).push(q); });
+      var topics = shuffle(Object.keys(byTopic), rnd);
+      while (out.length < n) {
+        var progressed = false;
+        for (var i = 0; i < topics.length && out.length < n; i++) {
+          var l = byTopic[topics[i]];
+          if (l.length) { out.push(l.shift()); progressed = true; }
+        }
+        if (!progressed) break;
       }
-      if (!progressed) break;
+      return out;
+    }
+    var out;
+    if (opts.zincirPay > 0 && !opts.zincir) {
+      var zin = pool.filter(function (q) { return q.zincir; });
+      var diger = pool.filter(function (q) { return !q.zincir; });
+      var nz = Math.min(zin.length, Math.round(count * opts.zincirPay));
+      out = dagit(zin, nz);
+      out = out.concat(dagit(diger, count - out.length));
+      if (out.length < count) {
+        var secili = {}; out.forEach(function (q) { secili[q.id] = 1; });
+        out = out.concat(dagit(zin.filter(function (q) { return !secili[q.id]; }), count - out.length));
+      }
+    } else {
+      out = dagit(pool, count);
     }
     return shuffle(out, rnd);
   }
@@ -292,7 +317,7 @@
   // Konu çalışması: önce görülmemiş, sonra tekrar listesindekiler, sonra diğerleri
   function selectTopic(bank, stats, konu, count, rnd, opts) {
     rnd = rnd || Math.random;
-    var pool = filterBank(bank, { zorluk: opts && opts.zorluk }).filter(function (q) { return q.konu === konu; });
+    var pool = filterBank(bank, { zorluk: opts && opts.zorluk, zincir: opts && opts.zincir }).filter(function (q) { return q.konu === konu; });
     var unseen = [], review = [], rest = [];
     pool.forEach(function (q) {
       var st = stats[q.id];
@@ -462,7 +487,7 @@
   var API = {
     DAY: DAY, SN_PER_SORU: SN_PER_SORU, TEKRAR_GUN: TEKRAR_GUN, OGRENILDI_SERI: OGRENILDI_SERI,
     KONULAR: KONULAR, KAYNAK_ADI: KAYNAK_ADI, TIP_ADI: TIP_ADI, TUM_TIPLER: TUM_TIPLER, VARSAYILAN_TIPLER: VARSAYILAN_TIPLER,
-    ZORLUK_ADI: ZORLUK_ADI, ZORLUK_SECENEK: ZORLUK_SECENEK, zorlukSecimi: zorlukSecimi, havuzOzet: havuzOzet,
+    ZORLUK_ADI: ZORLUK_ADI, ZORLUK_SECENEK: ZORLUK_SECENEK, zorlukSecimi: zorlukSecimi, zorlukFiltre: zorlukFiltre, havuzOzet: havuzOzet,
     konuAdi: konuAdi, rng: rng, shuffle: shuffle,
     examDurationSec: examDurationSec, formatDuration: formatDuration,
     emptyStat: emptyStat, applyAnswer: applyAnswer, inReview: inReview, isDue: isDue, isDueToday: isDueToday,
