@@ -55,12 +55,12 @@
 
   // Zorluk: 1 temel, 2 orta, 3 klasman (detaylı kural bilgisi)
   var ZORLUK_ADI = { 1: 'Temel', 2: 'Orta', 3: 'Klasman' };
-  // karma: soruların bir kısmı (zincirPay) uzun, çok olaylı "zincir vakalar"dan seçilir
+  // karma: soruların bir kısmı (zincirPay) maç senaryosu adımlarından seçilir (q.zincir = senaryo adımı)
   var ZORLUK_SECENEK = [
-    { id: 'karma', ad: 'Karma (%40 zincir vaka)', z: null, zincirPay: 0.4, sinav: true },
+    { id: 'karma', ad: 'Karma (%40 senaryo adımı)', z: null, zincirPay: 0.4, sinav: true },
     { id: 'hepsi', ad: 'Tümü', z: null },
     { id: 'klasman', ad: 'Yalnız klasman', z: [3] },
-    { id: 'zincir', ad: 'Yalnız zincir vakalar', z: null, zincir: true },
+    { id: 'zincir', ad: 'Yalnız senaryo adımları', z: null, zincir: true },
   ];
   function zorlukFiltre(id) {
     for (var i = 0; i < ZORLUK_SECENEK.length; i++) {
@@ -314,6 +314,24 @@
     return shuffle(out, rnd);
   }
 
+  // Maç senaryosu: adımlar her zaman senaryodaki sırayla gelir (karıştırılmaz)
+  function senaryoAdimlari(bank, sen) {
+    var byId = {};
+    bank.forEach(function (q) { byId[q.id] = q; });
+    return ((sen && sen.adimlar) || []).map(function (id) { return byId[id]; }).filter(Boolean);
+  }
+  // Senaryo listesi: adım sayısı, çözülen adım ve son cevapları doğru olan adım sayısı
+  function senaryoOzet(bank, senaryolar, stats) {
+    return (senaryolar || []).map(function (s) {
+      var adim = senaryoAdimlari(bank, s), cozulen = 0, dogru = 0;
+      adim.forEach(function (q) {
+        var st = stats && stats[q.id];
+        if (st && st.a > 0) { cozulen++; if (st.s > 0) dogru++; }
+      });
+      return { id: s.id, baslik: s.baslik, giris: s.giris, konular: s.konular || [], n: adim.length, cozulen: cozulen, dogru: dogru };
+    });
+  }
+
   // Konu çalışması: önce görülmemiş, sonra tekrar listesindekiler, sonra diğerleri
   function selectTopic(bank, stats, konu, count, rnd, opts) {
     rnd = rnd || Math.random;
@@ -495,6 +513,7 @@
     normalizeAnswer: normalizeAnswer, checkBosluk: checkBosluk, checkAnswer: checkAnswer, correctAnswerText: correctAnswerText,
     topicStats: topicStats, overallStats: overallStats, weakestTopics: weakestTopics, ruleErrors: ruleErrors, compareRule: compareRule,
     filterBank: filterBank, selectExam: selectExam, selectTopic: selectTopic, selectWeak: selectWeak, selectReview: selectReview,
+    senaryoAdimlari: senaryoAdimlari, senaryoOzet: senaryoOzet,
     buildGenPrompt: buildGenPrompt, validateGenerated: validateGenerated, genTargets: genTargets, KURAL_NOTLARI: KURAL_NOTLARI,
     optionOrder: optionOrder,
   };

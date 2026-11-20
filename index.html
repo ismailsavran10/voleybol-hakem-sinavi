@@ -346,6 +346,23 @@ main.wrap { padding-block: 22px 72px; display: grid; gap: 18px; }
 .change-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .sig-h { margin-top: 6px; }
 
+/* Maç senaryosu */
+.mode.wide { grid-column: 1 / -1; }
+.sen-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; margin-bottom: 10px; }
+.sen-panel summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; justify-content: space-between; }
+.sen-text { white-space: pre-line; color: var(--text-2); line-height: 1.55; margin-top: 4px; overflow-wrap: anywhere; }
+.sen-onceki, .sen-durum, .sen-giris { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; }
+.sen-onceki { margin-bottom: 10px; padding: 8px 12px; }
+.sen-onceki summary { cursor: pointer; }
+.sen-giris { margin-top: 10px; }
+.sen-list { max-height: 300px; }
+.qtext.sen { font-size: 16px; font-weight: 500; line-height: 1.6; white-space: normal; }
+.qtext.sen .ql { display: block; margin-top: 8px; }
+.qtext.sen .ql:first-child { margin-top: 0; }
+.qtext.sen .ql b { color: var(--primary-ink); font-weight: 700; }
+.qtext.sen .ql.soru { font-weight: 650; }
+@media (max-width: 640px) { .qtext.sen { font-size: 15.5px; } }
+
 /* Soru havuzu */
 .pool-head { display: grid; gap: 12px; }
 .pool-head select { width: 100%; min-width: 0; font: inherit; font-size: 15px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }

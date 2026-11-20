@@ -3,6 +3,7 @@
   'use strict';
   var H = window.HKM, SIG = window.HKM_SIGNALS, STUDY = window.HKM_STUDY;
   var BASE = (window.HKM_BANK || []).slice();
+  var SENARYOLAR = (window.HKM_BANK && window.HKM_BANK.senaryolar) || [];
   var SIGBY = {}; (SIG ? SIG.signals : []).forEach(function (s) { SIGBY[s.id] = s; });
 
   function now() { return window.__HKM_NOW__ ? window.__HKM_NOW__() : Date.now(); }
@@ -18,7 +19,7 @@
     store: null, storeKind: 'yukleniyor', loaded: false,
     ai: null, aiState: 'bekleniyor',
     view: 'home', session: null, sheet: null, result: null,
-    ui: { studyTab: 'ozet', reportOpen: null, confirmExit: false, confirmReset: false, examCount: 25, examTypes: H.VARSAYILAN_TIPLER.slice(), examZorluk: 'karma', topicSel: 1, topicCount: 20, topicZorluk: 'hepsi', havuzKonu: 1, havuzZorluk: 'hepsi', weakCount: 15, weakAI: true, reviewAI: true },
+    ui: { studyTab: 'ozet', reportOpen: null, confirmExit: false, confirmReset: false, examCount: 25, examTypes: H.VARSAYILAN_TIPLER.slice(), examZorluk: 'karma', topicSel: 1, topicCount: 20, topicZorluk: 'hepsi', havuzKonu: 1, havuzZorluk: 'hepsi', senaryoSel: SENARYOLAR.length ? SENARYOLAR[0].id : null, weakCount: 15, weakAI: true, reviewAI: true },
   };
 
   function rebuildBank() {
@@ -190,6 +191,7 @@
     S.session = {
       mode: mode, title: opts.title, items: questions.map(function (q) { return makeItem(q, false); }), idx: 0,
       startedAt: now(), duration: opts.duration || 0, finished: false, ai: null, info: opts.info || '',
+      senaryo: opts.senaryo || null,
     };
     S.ui.confirmExit = false; S.ui.reportOpen = null;
     S.view = 'test';
@@ -326,6 +328,12 @@
     var targets = (S.ui.reviewAI && S.ai && S.aiState === 'hazir') ? H.genTargets(S.bank, S.stats, { qids: sel.questions.map(function (q) { return q.id; }), limit: 4 }) : [];
     startSession('review', sel.questions, { title: 'Yanlışlarım', genTargets: targets, genCount: 5 });
   }
+  function senaryoBul(id) { return SENARYOLAR.filter(function (x) { return x.id === id; })[0] || null; }
+  function startSenaryo(id) {
+    var sen = senaryoBul(id); if (!sen) return;
+    var qs = H.senaryoAdimlari(S.bank, sen);
+    startSession('senaryo', qs, { title: 'Maç Senaryosu · ' + sen.baslik, info: qs.length + ' adım · adımlar sırayla, her adımdan sonra maç durumu', senaryo: sen });
+  }
   function startRule(kural) {
     var qs = S.bank.filter(function (q) { return q.dogrulandi && q.kural === kural; });
     startSession('rule', H.shuffle(qs, rnd), { title: 'Kural ' + kural });
@@ -398,6 +406,7 @@
       modeCard('topic', 'Konu Çalışması', 'Tek konu seç; her sorudan sonra doğru cevap ve kural açıklaması.', '21 konu', '', dis) +
       modeCard('weak', 'Zayıf Konu', 'En düşük başarılı konulardan ağırlıklı sorular.', weak.length ? weak.map(function (t) { return H.konuAdi(t.konu); }).slice(0, 2).join(', ') : 'Veri birikince odaklanır', aiOn ? orb() + 'Yapay zekâ' : '', dis) +
       modeCard('review', 'Yanlışlarım', 'Yanlış yaptığın sorular 1, 3 ve 7 gün sonra tekrar gelir.', due ? due + ' soru bugün bekliyor' : inRev + ' soru tekrar listesinde', due ? '<span class="pill due">' + due + '</span>' : (aiOn ? orb() + 'Yapay zekâ' : ''), dis) +
+      (SENARYOLAR.length ? modeCard('senaryo', 'Maç Senaryosu', 'Tek bir maçın olayları sırayla gelir: skor, servis, dönüş, değişiklik hakları ve yaptırımlar adımdan adıma taşınır.', SENARYOLAR.length + ' senaryo · ' + SENARYOLAR.reduce(function (n, x) { return n + x.adimlar.length; }, 0) + ' adım', 'Klasman', dis, 'wide') : '') +
       '</section>';
 
     h += '<section class="card"><div class="card-head"><h2>En zayıf 3 konu</h2><span class="muted">En az 3 cevap verilmiş konular</span></div>';
@@ -412,8 +421,8 @@
     h += '</section>';
     return h;
   }
-  function modeCard(kind, title, desc, meta, badge, dis) {
-    return '<button class="mode" data-act="open" data-sheet="' + kind + '"' + dis + '>' +
+  function modeCard(kind, title, desc, meta, badge, dis, cls) {
+    return '<button class="mode' + (cls ? ' ' + cls : '') + '" data-act="open" data-sheet="' + kind + '"' + dis + '>' +
       '<span class="mode-top"><span class="mode-title">' + title + '</span>' + (badge ? '<span class="mode-badge">' + badge + '</span>' : '') + '</span>' +
       '<span class="mode-desc">' + desc + '</span><span class="mode-meta">' + esc(meta) + '</span></button>';
   }
@@ -463,6 +472,18 @@
           return '<button class="chip' + (S.ui.weakCount === c ? ' on' : '') + '" data-act="weak-count" data-c="' + c + '">' + c + '</button>';
         }).join('') + '</div></fieldset>' + aiToggle('weakAI', targets) +
         '<div class="sheet-actions"><button class="btn ghost" data-act="close">Vazgeç</button><button class="btn primary" data-act="start-weak">Başlat</button></div>';
+    } else if (S.sheet === 'senaryo') {
+      var oz = H.senaryoOzet(S.bank, SENARYOLAR, S.stats);
+      var secili = oz.filter(function (x) { return x.id === S.ui.senaryoSel; })[0] || oz[0];
+      h += '<h2 id="sheet-title">Maç Senaryosu</h2><p class="muted">Her senaryo tek bir maçtır. Adımlar sırayla gelir; her adımın olayı önceki adımın sonucuna (skor, servis atan, dönüş, kullanılan haklar, yaptırımlar) bağlıdır. Cevaptan sonra maç durumu gösterilir.</p>' +
+        '<div class="topic-list sen-list" role="radiogroup" aria-label="Senaryo">' + oz.map(function (x) {
+          var on = secili && secili.id === x.id;
+          return '<label class="topic-opt' + (on ? ' on' : '') + '"><input type="radio" name="senaryo" id="senaryo-' + esc(x.id) + '" data-act="senaryo-sel" value="' + esc(x.id) + '"' + (on ? ' checked' : '') + '>' +
+            '<span class="t-no num">' + esc(x.id.slice(1)) + '</span><span class="t-name">' + esc(x.baslik) + '<small>' + x.n + ' adım · ' + x.konular.map(H.konuAdi).map(esc).join(', ') + '</small></span>' +
+            '<span class="t-rate num ' + (x.cozulen ? rateClass(x.dogru / x.n) : 'na') + '">' + (x.cozulen ? x.dogru + '/' + x.n : '–') + '</span></label>';
+        }).join('') + '</div>' +
+        (secili ? '<div class="sen-giris"><p class="small"><b>Maç bilgisi</b></p><p class="sen-text small">' + esc(secili.giris) + '</p></div>' : '') +
+        '<div class="sheet-actions"><button class="btn ghost" data-act="close">Vazgeç</button><button class="btn primary" data-act="start-senaryo"' + (secili ? '' : ' disabled') + '>Senaryoyu başlat</button></div>';
     } else if (S.sheet === 'review') {
       var r = H.selectReview(S.bank, S.stats, now(), 20);
       var tg = H.genTargets(S.bank, S.stats, { qids: r.questions.map(function (q) { return q.id; }), limit: 4 });
@@ -503,11 +524,17 @@
     h += '<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="' + s.items.length + '" aria-valuenow="' + (s.idx + 1) + '"><span style="width:' + ((s.idx + 1) / s.items.length * 100) + '%"></span></div>';
     h += '<div class="test-meta"><span class="num">Soru ' + (s.idx + 1) + ' / ' + s.items.length + '</span>' + aiStatus(s) + '</div>';
 
+    if (s.senaryo) {
+      // Maç bilgisi ilk adımda açık gelir; sonraki adımlarda katlanır, önceki adımın sonucu ayrıca gösterilir
+      var onceki = s.idx > 0 ? s.items[s.idx - 1].q : null;
+      h += '<details class="sen-panel"' + (s.idx === 0 ? ' open' : '') + '><summary><b>Maç bilgisi</b><span class="muted small">' + esc(s.senaryo.id) + ' · adım ' + (s.idx + 1) + '/' + s.items.length + '</span></summary><p class="sen-text">' + esc(s.senaryo.giris) + '</p></details>';
+      if (onceki && onceki.durum) h += '<details class="sen-onceki"><summary class="small"><b>Önceki adımın sonucu</b></summary><p class="sen-text small">' + esc(onceki.durum) + '</p></details>';
+    }
     h += '<article class="qcard" aria-live="polite">';
-    h += '<div class="qchips"><span class="chip static">' + esc(H.konuAdi(q.konu)) + '</span><span class="chip static ghost">' + H.TIP_ADI[q.tip] + '</span>' + (q.zincir ? '<span class="chip static strong">Zincir vaka</span>' : '') +
+    h += '<div class="qchips"><span class="chip static">' + esc(H.konuAdi(q.konu)) + '</span><span class="chip static ghost">' + H.TIP_ADI[q.tip] + '</span>' + (q.senaryo ? '<span class="chip static strong">' + (s.senaryo ? 'Adım ' + q.adim : 'Maç senaryosu ' + esc(q.senaryo) + ' · adım ' + q.adim) + '</span>' : '') +
       (it.gen ? '<span class="chip gen">' + orb() + 'Üretilmiş</span>' : '') +
       (S.reports[q.id] ? '<span class="chip warn">' + ICON.flag + 'Bildirildi</span>' : '') + '</div>';
-    h += '<p class="qtext">' + esc(q.soru) + '</p>';
+    h += soruHtml(q);
     if (q.gorsel) h += '<figure class="qimg"><img src="img/' + esc(q.gorsel) + '.webp" alt="Hakem işareti görseli" width="300" height="300"></figure>';
     h += answerArea(it, exam);
     if (!exam && it.checked) h += feedback(it);
@@ -574,6 +601,7 @@
     h += '<p class="fb-title">' + (it.correct ? ICON.check + 'Doğru' : ICON.x + 'Yanlış') + '</p>';
     if (!it.correct) h += '<p class="fb-answer">Doğru cevap: <b>' + answerDisplay(q) + '</b></p>';
     h += '<p class="fb-exp">' + esc(q.aciklama) + '</p>';
+    if (q.durum) h += durumKutusu(q);
     h += '<p class="fb-src"><span class="chip rule">' + esc(kuralLabel(q.kural)) + '</span>' + ilgiliChips(q) + '<span class="muted small">' + esc(kaynakText(q)) + '</span></p>';
     if (it.gen) {
       h += '<div class="gen-box"><p class="small">' + orb() + 'Bu soru yapay zekâ tarafından üretildi; istatistiklerini etkilemez. Doğruluğunu kontrol ettiysen kalıcı bankaya ekleyebilirsin.</p>' +
@@ -583,6 +611,18 @@
     }
     h += '</div>';
     return h;
+  }
+  // Senaryo adımında Durum/Olay/Soru satırları etiketli ayrı satırlar olarak gösterilir
+  function soruHtml(q) {
+    var lines = String(q.soru).split('\n');
+    if (!q.senaryo) return '<p class="qtext">' + esc(q.soru) + '</p>';
+    return '<p class="qtext sen">' + lines.map(function (l) {
+      var m = l.match(/^(Durum|Olay|Soru): (.*)$/);
+      return m ? '<span class="ql' + (m[1] === 'Soru' ? ' soru' : '') + '"><b>' + m[1] + ':</b> ' + esc(m[2]) + '</span>' : '<span class="ql">' + esc(l) + '</span>';
+    }).join('') + '</p>';
+  }
+  function durumKutusu(q) {
+    return '<div class="sen-durum"><p class="small"><b>Bu adımdan sonra maç durumu</b></p><p class="sen-text small">' + esc(q.durum) + '</p></div>';
   }
   function answerDisplay(q) {
     if (q.tip === 'isaret' && q.ters) { var s = SIGBY[q.secenekler[q.cevap].slice(1)]; return esc(s ? 'İşaret no. ' + s.no + ' – ' + s.ad : q.secenekler[q.cevap]); }
@@ -621,7 +661,7 @@
       var q = it.q;
       return '<li class="rv"><p class="rv-q">' + esc(q.soru) + '</p>' + (q.gorsel ? '<img class="rv-img" src="img/' + esc(q.gorsel) + '.webp" alt="Hakem işareti görseli" loading="lazy">' : '') +
         '<p class="rv-a">' + (it.checked ? '<span class="low">Senin cevabın: ' + esc(givenText(it)) + '</span> · ' : '<span class="muted">Boş bırakıldı</span> · ') + '<span class="good">Doğru: ' + answerDisplay(q) + '</span></p>' +
-        '<p class="rv-e">' + esc(q.aciklama) + '</p><p class="fb-src"><span class="chip rule">' + esc(kuralLabel(q.kural)) + '</span>' + ilgiliChips(q) + '<span class="muted small">' + esc(kaynakText(q)) + '</span>' + (it.gen ? '<span class="chip gen">' + orb() + 'Üretilmiş</span>' : '') + '</p>' +
+        '<p class="rv-e">' + esc(q.aciklama) + '</p>' + (q.durum ? durumKutusu(q) : '') + '<p class="fb-src"><span class="chip rule">' + esc(kuralLabel(q.kural)) + '</span>' + ilgiliChips(q) + '<span class="muted small">' + esc(kaynakText(q)) + '</span>' + (it.gen ? '<span class="chip gen">' + orb() + 'Üretilmiş</span>' : '') + '</p>' +
         (it.gen ? '' : reportBlock(q.id)) + '</li>';
     }).join('') + '</ol>';
     h += '</section>';
@@ -738,7 +778,7 @@
       } else {
         opts = '<p class="small"><span class="good">Doğru: ' + answerDisplay(q) + '</span></p>';
       }
-      return '<li><details class="pool-q"><summary><span class="qline">' + esc(q.soru) + '</span><span class="pool-meta"><span class="chip rule">' + esc(kuralLabel(q.kural)) + '</span><span class="chip static ghost">' + H.TIP_ADI[q.tip] + '</span>' + (q.zincir ? '<span class="chip static strong">Zincir</span>' : '') + '<span class="chip static' + (q.zorluk === 3 ? ' strong' : '') + '">' + H.ZORLUK_ADI[q.zorluk] + '</span></span></summary>' +
+      return '<li><details class="pool-q"><summary><span class="qline">' + esc(q.soru) + '</span><span class="pool-meta"><span class="chip rule">' + esc(kuralLabel(q.kural)) + '</span><span class="chip static ghost">' + H.TIP_ADI[q.tip] + '</span>' + (q.senaryo ? '<span class="chip static strong">Senaryo ' + esc(q.senaryo) + '/' + q.adim + '</span>' : '') + '<span class="chip static' + (q.zorluk === 3 ? ' strong' : '') + '">' + H.ZORLUK_ADI[q.zorluk] + '</span></span></summary>' +
         (q.gorsel ? '<img class="rv-img" src="img/' + esc(q.gorsel) + '.webp" alt="Hakem işareti görseli" loading="lazy">' : '') +
         opts + '<p class="small muted">' + esc(q.aciklama) + '</p><p class="fb-src">' + ilgiliChips(q) + '<span class="muted small">' + esc(kaynakText(q)) + '</span></p></details></li>';
     }).join('') + '</ol>';
@@ -773,6 +813,7 @@
       case 'start-exam': startExam(); break;
       case 'topic-count': var c = t.getAttribute('data-c'); S.ui.topicCount = c === 'all' ? 'all' : parseInt(c, 10); renderSheet(); break;
       case 'start-topic-sheet': startTopic(S.ui.topicSel, S.ui.topicCount, S.ui.topicZorluk); break;
+      case 'start-senaryo': startSenaryo(S.ui.senaryoSel || (SENARYOLAR[0] && SENARYOLAR[0].id)); break;
       case 'exam-z': S.ui.examZorluk = t.getAttribute('data-z'); renderSheet(); break;
       case 'topic-z': S.ui.topicZorluk = t.getAttribute('data-z'); renderSheet(); break;
       case 'havuz-z': S.ui.havuzZorluk = t.getAttribute('data-z'); renderMain(); break;
@@ -823,6 +864,8 @@
       renderSheet();
     } else if (act === 'topic-sel') {
       S.ui.topicSel = parseInt(t.value, 10); renderSheet();
+    } else if (act === 'senaryo-sel') {
+      S.ui.senaryoSel = t.value; renderSheet();
     } else if (act === 'havuz-konu') {
       S.ui.havuzKonu = parseInt(t.value, 10); renderMain();
     } else if (act === 'ai-toggle') {
